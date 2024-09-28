@@ -14,14 +14,22 @@ print('Staring up on {}.'.format(server_address))
 
 sock.bind(server_address)
 
+clients = set()
+
 while True:
     try:
         data, address = sock.recvfrom(4096)
         
         if data and address:
             print(data.decode('utf-8'))
-            response = "メッセージを受信しました：".encode('utf-8') + data
-            sent = sock.sendto(response, address)
+            clients.add(address)
+            for client in clients:
+                try:
+                    sent = sock.sendto(data, client)
+                    print(f'client: {client}')
+                except Exception as e:
+                    print(f"クライアント {client} へのメッセージ送信中にエラーが発生しました: {e}")
+                    clients.remove(client)
         else:
             print("無効なデータまたはアドレスを受信しました。")
     except Exception as e:

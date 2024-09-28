@@ -1,6 +1,8 @@
 import socket
 import os
 import time
+import tempfile
+import threading
 
 def create_socket():
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
@@ -21,9 +23,18 @@ def connect_to_server(sock):
             time.sleep(5)
 
 sock = create_socket()
-address = '/tmp/chat_messenger_socket_client'
 
-username = input('ユーザー名を入力してください：\n')
+username = input('ユーザー名を入力してください：')
+
+def generate_unique_address():
+    # 一時ディレクトリ内にユニークなファイル名を生成
+    temp_dir = tempfile.gettempdir()
+    unique_filename = os.path.join(temp_dir, f'chat_messenger_socket_client_{username}')
+    return unique_filename
+
+# 動的にアドレスを生成
+address = generate_unique_address()
+
 
 try:
     os.unlink(address)
@@ -52,13 +63,33 @@ def send_message(sock, message):
             print(f"送信エラー: {e}")
             return False
 
-try:
+message_history = []
+
+def receive_messages(sock):
     while True:
-        message = input('メッセージを入力してください（終了するには"exit"と入力）：\n')
+        try:
+            data, _ = sock.recvfrom(4096)
+            message_history.append(data.decode())
+            message_history.append('\n')
+            print("".join(message_history))
+            print("メッセージを入力してください（終了するには\"exit\"と入力）：", end="", flush=True)
+        except socket.timeout:
+            continue
+        except Exception as e:
+            print(f"受信エラー: {e}")
+            break
+
+try:
+    # メッセージ受信用のスレッドを開始
+    receive_thread = threading.Thread(target=receive_messages, args=(sock,), daemon=True)
+    receive_thread.start()
+
+    while True:
+        message = input('メッセージを入力してください（終了するには"exit"と入力）：')
         if message.lower() == 'exit':
             break
         
-        full_message = f'ユーザーネーム: {username}\n{message}'
+        full_message = f'ユーザーネーム: {username}' + '\n' + f'{message}'
         if send_message(sock, full_message):
             print("")
         else:
